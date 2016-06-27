@@ -105,6 +105,8 @@ int main(int argc, char *argv[]){
 		 exit(0);
 		}
 		if(extract){
+			strcpy(extractFilename,outputFilename);
+			strcat(extractFilename,".umis");
 	  if(extractfp=fopen(extractFilename,"w")){
 			 if(verbose) fprintf(stderr,"opening umi file %s\n",extractFilename);
 		 }	
