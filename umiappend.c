@@ -11,8 +11,9 @@ KSEQ_INIT(gzFile, gzread);
 int main(int argc, char *argv[]){
  gzFile fp1=0, fp2=0;  
  kseq_t *seq1,*seq2;
- FILE *outputfp=stdout;
- char verbose=0;  
+ char *extract,*extractFilename=0;
+ FILE *outputfp=stdout,*extractfp;
+ char verbose=0,extract=0;  
  int l1,l2,emptySeqs=0,nameMismatch=0,minQual=10,barcodeLength=R1_LENGTH,nArgs=0;
  int adjustedQ=minQual+33;
  char *arg=0,*outputFilename=0,*inputFilenames[2]={0,0};
@@ -21,11 +22,14 @@ int main(int argc, char *argv[]){
  optparse_init(&options, argv);
 
  //parse flags
- while ((opt = optparse(&options, "vai:o:l:q:")) != -1) {
+ while ((opt = optparse(&options, "vei:o:l:q:")) != -1) {
   switch (opt){
 			case 'v':
 			 verbose=1;
-			break; 
+			break;
+			case 'e':
+    extract=1;
+   break; 
    case 'o':
     outputFilename=options.optarg;
    break;
@@ -41,7 +45,7 @@ int main(int argc, char *argv[]){
     exit(0);
   }
  }
- 
+	
  //parse file arguments
  while ((arg = optparse_arg(&options))){
 		inputFilenames[nArgs++]=arg;
@@ -54,12 +58,23 @@ int main(int argc, char *argv[]){
 		fprintf(stderr, "Usage: %s -lf <in.r1> <in.r2>\n", argv[0]);  
   exit(0);
 	}
+	if(!outputFilename && extract){
+		fprintf(stderr, "must give outputfilename if saving separate umi file\n");  
+  exit(0);
+	}
+ //extract filename
+ if(extract){
+  if(!(extractFilename=malloc(strlen(outputFilename)+5))){
+	 	exit(0);
+	 }
+	}
 	if(verbose){
 		//print out the parameters
 		fprintf(stderr,"Verbose mode on\n");
 		fprintf(stderr,"Barcode Length %d\n",barcodeLength);
 		fprintf(stderr,"Minimum quality %d\n",minQual);
 		if(outputFilename)fprintf(stderr,"Outputs to %s\n",outputFilename);
+				if(outputFilename && extract)fprintf(stderr,"Outputs umis to %s\n",extractFilename);
 		else fprintf(stderr,"outputs to stdout\n");
 		fprintf(stderr,"R1 file %s\n",inputFilenames[0]);		
 		fprintf(stderr,"R2 file %s\n",inputFilenames[1]);
@@ -89,7 +104,16 @@ int main(int argc, char *argv[]){
 		 fprintf(stderr,"unable to open output file %s\n",outputFilename),	 
 		 exit(0);
 		}
-	}	
+		if(extract){
+	  if(extractfp=fopen(extractFilename,"w")){
+			 if(verbose) fprintf(stderr,"opening umi file %s\n",extractFilename);
+		 }	
+		 else{	
+		  fprintf(stderr,"unable to open output file %s\n",outputFilename),	 
+		  exit(0);
+		 }
+		}
+	}
  while ((l1 = kseq_read(seq1)) >= 0 && (l2 = kseq_read(seq2)) >=0) {
 		int i=0;
 	 char *cptr,*qptr; 
@@ -108,10 +132,26 @@ int main(int argc, char *argv[]){
 		//append sequence
 		cptr=seq1->seq.s;
 		qptr=seq1->qual.s;
-		while(*cptr && i < barcodeLength){
-			if(*qptr<adjustedQ)fputc('N',outputfp);
-			else fputc(*cptr,outputfp);
-			cptr++;qptr++;i++;
+		if(extract){
+			while(*cptr && i < barcodeLength){
+			 if(*qptr<adjustedQ){
+					fputc('N',outputfp);
+					fputc('N',extractfp);
+				}
+			 else{
+					fputc(*cptr,outputfp);
+					fputc(*cptr,extractfp);
+				}
+			 cptr++;qptr++;i++;
+		 }
+		 fputc('\n',extractfp);	
+		}
+		else{	
+		 while(*cptr && i < barcodeLength){
+		 	if(*qptr<adjustedQ)fputc('N',outputfp);
+		 	else fputc(*cptr,outputfp);
+		 	cptr++;qptr++;i++;
+		 }
 		}
 		fputc('\n',outputfp);
 		fputs(seq2->seq.s,outputfp);
@@ -124,6 +164,10 @@ int main(int argc, char *argv[]){
  kseq_destroy(seq2);
  gzclose(fp1);
  gzclose(fp2);
+ if(extract){
+		fclose(extractfp);
+		free(extractFilename);
+	}	
  if(emptySeqs || nameMismatch){
 		fprintf(stderr,"WARNING %d empty sequences and %d name mismatches encountered\n",emptySeqs,nameMismatch);
 	}	
