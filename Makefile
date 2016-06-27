@@ -6,8 +6,12 @@ LIBS= -lm -lc -lgcc -lrt -lz
 .PHONY: clean all
 
 OBJ_umiappend = umiappend.o optparse/optparse.o
-
+OBJ_umiextract = umiextract.o optparse/optparse.o
 #make optparse
+umiextract : $(OBJ_umiextract)
+	$(LD) -o umiextract $(LFLAGS) $(OBJ_umiextract) $(LIBS)
+umiextract.o : umiextract.c 
+	$(CC) $(CFLAGS) -c umiextract.c
 umiappend : $(OBJ_umiappend)
 	$(LD) -o umiappend $(LFLAGS) $(OBJ_umiappend) $(LIBS)
 umiappend.o : umiappend.c 
