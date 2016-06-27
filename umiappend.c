@@ -11,7 +11,7 @@ KSEQ_INIT(gzFile, gzread);
 int main(int argc, char *argv[]){
  gzFile fp1=0, fp2=0;  
  kseq_t *seq1,*seq2;
- char *extract,*extractFilename=0;
+ char *extractFilename=0;
  FILE *outputfp=stdout,*extractfp;
  char verbose=0,extract=0;  
  int l1,l2,emptySeqs=0,nameMismatch=0,minQual=10,barcodeLength=R1_LENGTH,nArgs=0;
