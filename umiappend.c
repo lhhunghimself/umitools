@@ -3,7 +3,7 @@
 #include <string.h>  
 #include "kseq.h"
 #include "optparse.h"  
-
+#include "fasthamming.h"
 #define R1_LENGTH 16 //default barcode length
 
 KSEQ_INIT(gzFile, gzread);  
@@ -12,8 +12,8 @@ int main(int argc, char *argv[]){
  gzFile fp1=0, fp2=0;  
  kseq_t *seq1,*seq2;
  char *extractFilename=0;
- FILE *outputfp=stdout,*extractfp;
- char verbose=0,extract=0;  
+ FILE *outputfp=0,*extractfp=0;
+ char verbose=0,extract=0,append=0;  
  int l1,l2,emptySeqs=0,nameMismatch=0,minQual=10,barcodeLength=R1_LENGTH,nArgs=0;
  int adjustedQ=minQual+33;
  char *arg=0,*outputFilename=0,*inputFilenames[2]={0,0};
@@ -22,8 +22,11 @@ int main(int argc, char *argv[]){
  optparse_init(&options, argv);
 
  //parse flags
- while ((opt = optparse(&options, "vei:o:l:q:")) != -1) {
+ while ((opt = optparse(&options, "aiev:o:l:q:")) != -1) {
   switch (opt){
+			case 'a'
+			 append=1;
+			break;
 			case 'v':
 			 verbose=1;
 			break;
@@ -58,11 +61,11 @@ int main(int argc, char *argv[]){
 		fprintf(stderr, "Usage: %s -lf <in.r1> <in.r2>\n", argv[0]);  
   exit(0);
 	}
-	if(!outputFilename && extract){
-		fprintf(stderr, "must give outputfilename if saving separate umi file\n");  
+	if((append && extract && ! outputfileName)){
+		fprintf(stderr, "must give outputfileName if appending and extracting\n");  
   exit(0);
 	}
- //extract filename
+ //extract fileName
  if(extract){
   if(!(extractFilename=malloc(strlen(outputFilename)+5))){
 	 	exit(0);
@@ -137,11 +140,11 @@ int main(int argc, char *argv[]){
 		if(extract){
 			while(*cptr && i < barcodeLength){
 			 if(*qptr<adjustedQ){
-					fputc('N',outputfp);
+					if(outputfp)fputc('N',outputfp);
 					fputc('N',extractfp);
 				}
 			 else{
-					fputc(*cptr,outputfp);
+					if(outputfp)fputc(*cptr,outputfp);
 					fputc(*cptr,extractfp);
 				}
 			 cptr++;qptr++;i++;
@@ -168,11 +171,12 @@ int main(int argc, char *argv[]){
  gzclose(fp2);
  if(extract){
 		fclose(extractfp);
-		free(extractFilename);
+		if(extractFileName)free(extractFileName)
 	}	
  if(emptySeqs || nameMismatch){
 		fprintf(stderr,"WARNING %d empty sequences and %d name mismatches encountered\n",emptySeqs,nameMismatch);
-	}	
+	}
+	if(outputFileName) free(outputFileName);	
  return 0;  
 }
 
