@@ -5,22 +5,27 @@
 #include <string>
 #include "fasthamming.hpp"
 using namespace std;
-template <class T>class umipanel{
-	//T is used to choose between 32 and 64 bit uint
+template <class T1, class T2>class umipanel{
+	//T1 is used to choose between 32 and 64 bit uint
+	//T2 is used to choose between unsigned char for 96 weill and uint16_t for 384 wells
 	public:
+	 T2 *hash;  //for barcode
 	 vector<string> sequences; //contains panel of barcodes 
 	 vector<string> wells;     //contains well of barcodes 
-  vector <acgt<T>> Aseqs;
+  vector <acgt<T1>> Aseqs;
  	string panelID;
-	 unsigned int nBarCodes=0;
+	 unsigned int nBarcodes=0;
 	 unsigned int barcodeSize=0;
-	 hamming<T> hammingEval;
+	 unsigned int hashSize=0;
+	 unsigned int hashTolerance; //how many basepairs difference for matching panel
+	 hamming<T1> hammingEval;
 	 umipanel(){
-			nBarCodes=0;
+			nBarcodes=0;
 			barcodeSize=0;
 		}	
- 	umipanel(string fileName){
+ 	umipanel (string fileName,int tol){
 			//read in panel
+			hashTolerance=tol;
  		string line,name,well,sequence;
    ifstream inFile(fileName,ifstream::in);
    while(getline(inFile,line)){
@@ -29,34 +34,69 @@ template <class T>class umipanel{
     wells.push_back(well);
     sequences.push_back(sequence);
     if(!barcodeSize) barcodeSize=sequences[0].size();
-    Aseqs.push_back(acgt<T>(sequence.c_str(),barcodeSize)); 
-    nBarCodes++;
+    Aseqs.push_back(acgt<T1>(sequence.c_str(),barcodeSize)); 
+    nBarcodes++;
  	 }
    inFile.close();
-
-   hammingEval=hamming<uint64_t>(barcodeSize);
+   hammingEval=hamming<T1>(barcodeSize);
+   hashSize=5;
+   for(int i=1;i<barcodeSize;i++){
+				hashSize*=5;
+			}
+   hash=new T2[hashSize];
+			memset(hash,0,hashSize*sizeof(T2));
+   fillHash();
 	 }
-	 unsigned int findClosest(char *sequence,unsigned int maxDist, string &bestWell,string &bestSequence, unsigned int &nBest){
-		 unsigned int bestDist=maxDist;
-		 unsigned int bestIndex=0;
-		 
-		 //hammingEval.encodeSequence(sequence,querySequence);
-		 nBest=0;
-		 for(unsigned int i=0;i<nBarCodes;i++){
-				unsigned int dist=0;
-		 	//unsigned int dist=hammingEval.hpopcount_l(encodedSequences+i*encodeOffset, querySequence,bestDist);
-    if(dist <bestDist){
-					nBest=1;
-		 		bestDist=dist;
-		 		bestIndex=i;
-		 	}
-		 	else if(nBest && dist == bestDist){
-					nBest++;
-				}		
-		 }
-   bestWell=wells[bestIndex];
-   bestSequence=sequences[bestIndex];
-   return bestDist;
+	 ~umipanel(){
+			if(hash)delete[] hash;
+		}	
+	 void fillHash(){
+			char bp[5]={'N','A','C','G','T'};
+			char *seq=new char[barcodeSize];
+			char *indices=new char[barcodeSize];
+			memset(indices,0,barcodeSize);
+			hash[0]=0;
+			for(int i=0;i<barcodeSize;i++)
+			 seq[i]='N';
+   for(int i=1;i<hashSize;i++){
+				int divisor=5;
+				seq[0]=bp[i%divisor];
+				int j=1;
+				while(i%divisor == 0 && j<barcodeSize){
+					indices[j]=(indices[j]+1)%5;
+					seq[j]=bp[indices[j]];
+				 divisor*=5;
+				 j++;
+				}
+				hash[i]=hammingEval.bestMatch(sequences,seq,nBarcodes,hashTolerance)+1;		
+			}
+			delete[] seq;	
+			delete[] indices;	
 		}
+		unsigned int bestMatch(char *query){
+			return (unsigned int) hash[hashCode(query)];
+		}		 
+		unsigned int hashCode(char *sequence){
+			unsigned int code =0;
+			int k=1;
+			for (int i=0;i<barcodeSize;i++){
+				switch (sequence[i]){
+					case 'A':
+					 code+=k;
+					break;
+					case 'C':
+					 code+=2*k;
+					 break;
+					case 'G':
+					 code+=3*k;
+					 break;
+				 case 'T':
+				  code+=4*k;
+				  break;  
+				}
+				k*=5;				
+			}
+			return code;	
+		}	
 };	
 

@@ -101,10 +101,10 @@ template <class T> class acgt{
   unsigned char *cseq; //aliases to sequence
   T *Tseq; //aliases to sequence
   unsigned int Ncount=0;
-	 acgt(char *inputSequence,int _len){
+	 acgt(const char *inputSequence,int _len){
 			if(! _len) _len=strlen(inputSequence);
 		 seqLength=_len;
-		 const int nBytes=(seqLength%(2*sizeof(T)))? (seqLength/(2*sizeof(T))+1) : seqLength/2*sizeof(T); //bytes necessary to hold sequence
+		 const int nBytes=(seqLength%(2*sizeof(T)))? (seqLength/(2*sizeof(T))+1)*sizeof(T) : seqLength/(2*sizeof(T))*sizeof(T); //bytes necessary to hold sequence
    sequence.resize(nBytes);
    memset(&(sequence[0]),0,sequence.size());
 		 cseq=(unsigned char*) &(sequence[0]);
@@ -132,7 +132,7 @@ template <class T> class acgt{
 		 	continue;
 		 }
 		 else Ncount++;
-		} 
+		}
 	}
 	acgt(){
 		seqLength=0;
@@ -377,13 +377,110 @@ template <class T> class hamming{
 				maxDist=dist;
 			}			
 		}
-		fprintf(stdout,"%s\n",query->acgt2seq());
-		for(int i=0;i<bestIndices.size();i++){
-			fprintf(stdout,"%s %d\n",panelSeqs[bestIndices[i]].acgt2seq(),maxDist);
-		}	
+		//fprintf(stdout,"%.6s\n",query->acgt2seq());
+		//for(int i=0;i<bestIndices.size();i++){
+		//	fprintf(stdout,"%.6s %d\n",panelSeqs[bestIndices[i]].acgt2seq(),maxDist);
+		//}	
 		return(maxDist);	
+	}
+	
+	int bestMatch (acgt<uint32_t> *panelSeqs, acgt<uint32_t> *query,int nPanelSeqs){
+		//when comparing a single query with Ns we don't have to take into account the N's since
+		//they give the same signal regardless of the panelSeq
+		int bestIndex=0,nBest=1;
+		int maxDist=-query->Ncount;
+ 	for(int j=0;j<chunkSize;j++){
+			maxDist+=__builtin_popcount(panelSeqs[0].Tseq[j] ^ query->Tseq[j]);
+		}
+		for(int i=1;i<nPanelSeqs;i++){
+			int dist=-query->Ncount;
+		 for(int j=0;j<chunkSize && dist <= maxDist ;j++){
+			 dist+=__builtin_popcount(panelSeqs[i].Tseq[j] ^ query->Tseq[j]);
+		 }
+		 if(maxDist == dist){
+				if(!dist)return -1; //dupe found
+				nBest++;
+			}
+			else if(dist < maxDist){
+				nBest=1;
+				bestIndex=i;
+				maxDist=dist;
+			}			
+		}
+		
+		if(maxDist ==0 && nBest==1){
+			return bestIndex;
+		}
+		return -1;	
 	}	
+	unsigned int bestMatch (vector<string> &panelSeqs, char *query,int nPanelSeqs){
+		//when comparing a single query with Ns we don't have to take into account the N's since
+		//they give the same signal regardless of the panelSeq
+		//we will initialize it anyway to get a meaningfull absolute distance
+		int bestIndex=0,nBest=1;
+		int maxDist=0;
+  for (unsigned int i = 0; i < patternLength; i++){
+	 	if(query[i] != 'N' && panelSeqs[0][i] !=query[i]){
+    maxDist++;
+	 	}	
+	 }
+		for(int i=1;i<nPanelSeqs ;i++){
+   int dist=0;
+   for (unsigned int j = 0; j < patternLength && dist<=maxDist; j++){
+				if(query[j] != 'N' && panelSeqs[i][j] !=query[j]){
+     dist++;
+				}	
+			}	
+		 if(maxDist == dist){				
+				//if(!dist)return -1; //dupe found
+				nBest++;
+			}
+			else if(dist < maxDist){
+				nBest=1;
+				bestIndex=i;
+				maxDist=dist;
+			}			
+		}
 
+		if(maxDist ==0 && nBest==1){
+
+			return bestIndex;
+		}
+		return -1;	
+	}
+		unsigned int bestMatch (vector<string> &panelSeqs, char *query,int nPanelSeqs,int tol){
+		//when comparing a single query with Ns we don't have to take into account the N's since
+		//they give the same signal regardless of the panelSeq
+		//we will initialize it anyway to get a meaningfull absolute distance
+		int bestIndex=0,nBest=1;
+		int maxDist=0;
+  for (unsigned int i = 0; i < patternLength; i++){
+	 	if(query[i] != 'N' && panelSeqs[0][i] !=query[i]){
+    maxDist++;
+	 	}	
+	 }
+		for(int i=1;i<nPanelSeqs ;i++){
+   int dist=0;
+   for (unsigned int j = 0; j < patternLength && dist<=maxDist; j++){
+				if(query[j] != 'N' && panelSeqs[i][j] !=query[j]){
+     dist++;
+				}	
+			}	
+		 if(maxDist == dist){				
+				//if(!dist)return -1; //dupe found
+				nBest++;
+			}
+			else if(dist < maxDist){
+				nBest=1;
+				bestIndex=i;
+				maxDist=dist;
+			}			
+		}
+		if(maxDist <=tol && nBest==1){
+			return bestIndex;
+		}
+		return -1;	
+	}
 	 unsigned int distance (nacgt<uint32_t> *a, nacgt<uint32_t> *b, unsigned int maxdist){
  	int i=0,dist=0;
  	int maxdist2=2*maxdist;
@@ -407,7 +504,7 @@ template <class T> class hamming{
 		return dist;	
 	}
 
- unsigned int slowDistance(char *a, char *b, unsigned int len,int maxdist){
+ unsigned int slowDistance(const char *a, const char *b, unsigned int len,int maxdist){
 	 int dist=0;
 	 const int maxdist16=16*maxdist;			
   for (unsigned int i = 0; i < len && dist<maxdist16; i++){
@@ -427,6 +524,7 @@ template <class T> class hamming{
 	 if(dist > maxdist16) return maxdist16;
   return(dist);
 	}
+
 	#ifdef USELUT
 	unsigned int hpopcount(nacgt<uint32_t> *a, nacgt<uint32_t> *b, unsigned int maxdist){
  	int i=0,dist=0; 

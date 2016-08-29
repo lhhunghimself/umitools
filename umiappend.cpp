@@ -24,9 +24,12 @@ int main(int argc, char *argv[]){
  string barcodeFileName;
  struct optparse options;
  int opt;
- umipanel<uint64_t> *barcodePanel=0;
+ int hashTolerance=1;
  optparse_init(&options, argv);
-
+ 
+ //change this if using 384 wells
+ umipanel<uint32_t,unsigned char> *barcodePanel=0;
+ 
  //parse flags
  while ((opt = optparse(&options, "aievd:b:o:l:q:")) != -1) {
   switch (opt){
@@ -48,8 +51,7 @@ int main(int argc, char *argv[]){
    case 'b':
     barcode=1;
     barcodeFileName=options.optarg;
-    barcodePanel=new umipanel(barcodeFileName);
-    barcodeSize=barcodePanel->barcodeSize;
+    barcodePanel=new umipanel<uint32_t,unsigned char> (barcodeFileName,hashTolerance);
    break;
    case 'l':
     UMILength=atoi(options.optarg);
@@ -164,40 +166,34 @@ int main(int argc, char *argv[]){
 		 cptr++;qptr++;i++;
 		}
 		//barcode correct
-		if(barcode){
-			barcodePanel->findClosest(seq1->seq.s,minDist,bestWell,bestSequence,nBest);
-		}		
-  if(nBest==1){
+		int wellIndex=barcodePanel->bestMatch(seq1->seq.s);		
+  if(wellIndex--){ //wellIndex returns 0 when no match index+1 otherwise
 			cptr=seq1->seq.s+barcodeSize;
 		 if(extractfp){
-				fputs(bestWell.c_str(),extractfp);
+				fwrite(barcodePanel->wells[wellIndex].c_str(),barcodePanel->wells[wellIndex].length(),1,extractfp);
 				fputc(':',extractfp);
-				for(int k=0;k<UMILength-barcodeSize;k++)
-				 fputc(cptr[k],extractfp);
+				fwrite(cptr,UMILength-barcodeSize,1,extractfp);;
 				fputc('\n',extractfp);
 			}
 		 if(outputfp){
-				fputs(bestWell.c_str(),outputfp);
+    fwrite(barcodePanel->wells[wellIndex].c_str(),barcodePanel->wells[wellIndex].length(),1,outputfp);
 				fputc(':',outputfp);
-				for(int k=0;k<UMILength-barcodeSize;k++)
-				 fputc(cptr[k],outputfp);
+				fwrite(cptr,UMILength-barcodeSize,1,outputfp);;
 				fputc('\n',outputfp);
 			}
   }
 		else{
 			cptr=seq1->seq.s;
 		 if(extractfp){
-				fputs("XX",extractfp);
+				fputs("X",extractfp);
 				fputc(':',extractfp);
-				for(int k=0;k<UMILength;k++)
-				 fputc(cptr[k],extractfp);
+				fwrite(cptr,UMILength-barcodeSize,1,extractfp);
 				fputc('\n',extractfp);
 			}				
 		 if(outputfp){
 				fputs("XX",outputfp);
 				fputc(':',outputfp);
-				for(int k=0;k<UMILength;k++)
-				 fputc(cptr[k],outputfp);
+				fwrite(cptr,UMILength-barcodeSize,1,outputfp);;
 				fputc('\n',outputfp);
 			}					
 		}
@@ -220,7 +216,7 @@ int main(int argc, char *argv[]){
  if(emptySeqs || nameMismatch){
 		fprintf(stderr,"WARNING %d empty sequences and %d name mismatches encountered\n",emptySeqs,nameMismatch);
 	}
-	if(outputFileName) free(outputFileName);	
+	//if(outputFileName) free(outputFileName);	
 	if(barcodePanel)delete barcodePanel;
  return 0;  
 }
