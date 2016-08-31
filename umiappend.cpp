@@ -24,14 +24,14 @@ int main(int argc, char *argv[]){
  string barcodeFileName;
  struct optparse options;
  int opt;
- int hashTolerance=1;
+ int mismatchTol=1,NTol=2;
  optparse_init(&options, argv);
  
  //change this if using 384 wells
  umipanel<uint32_t,unsigned char> *barcodePanel=0;
  
  //parse flags
- while ((opt = optparse(&options, "aievd:b:o:l:q:")) != -1) {
+ while ((opt = optparse(&options, "aievm:N:d:b:o:l:q:")) != -1) {
   switch (opt){
 			case 'a':
 			 append=1;
@@ -47,11 +47,16 @@ int main(int argc, char *argv[]){
    break;
    case 'd':
     minDist=atoi(options.optarg);
+   break;   
+   case 'm':
+    mismatchTol=atoi(options.optarg);
+   break;   
+   case 'N':
+    NTol=atoi(options.optarg);
    break;
    case 'b':
     barcode=1;
     barcodeFileName=options.optarg;
-    barcodePanel=new umipanel<uint32_t,unsigned char> (barcodeFileName,hashTolerance);
    break;
    case 'l':
     UMILength=atoi(options.optarg);
@@ -95,6 +100,10 @@ int main(int argc, char *argv[]){
 		fprintf(stderr,"R1 file %s\n",inputFileNames[0]);		
 		fprintf(stderr,"R2 file %s\n",inputFileNames[1]);
 	}
+	if(barcode){
+  barcodePanel=new umipanel<uint32_t,unsigned char> (barcodeFileName,mismatchTol,NTol);
+	}	
+	
 	//check if the 		       
  if((fp1 = gzopen(inputFileNames[0], "r"))){
 		if(verbose)fprintf(stderr,"opened R1 file %s\n",inputFileNames[0]);
@@ -136,7 +145,7 @@ int main(int argc, char *argv[]){
 	else{
 		if(extract)extractfp=stdout;
 		else outputfp=stdout;
-	}	
+	}
  while ((l1 = kseq_read(seq1)) >= 0 && (l2 = kseq_read(seq2)) >=0) {
 		int i=0;
 		unsigned int nBest=0;
@@ -166,45 +175,51 @@ int main(int argc, char *argv[]){
 		 cptr++;qptr++;i++;
 		}
 		//barcode correct
-		int wellIndex=barcodePanel->bestMatch(seq1->seq.s);		
-  if(wellIndex--){ //wellIndex returns 0 when no match index+1 otherwise
-			cptr=seq1->seq.s+barcodeSize;
+		int wellIndex=0;
+		if(barcode) wellIndex=barcodePanel->bestMatch(seq1->seq.s);		
+  if(wellIndex){ //wellIndex returns 0 when no match index+1 otherwise
+			wellIndex--;
+		 cptr=seq1->seq.s+barcodeSize;
 		 if(extractfp){
-				fwrite(barcodePanel->wells[wellIndex].c_str(),barcodePanel->wells[wellIndex].length(),1,extractfp);
-				fputc(':',extractfp);
-				fwrite(cptr,UMILength-barcodeSize,1,extractfp);;
-				fputc('\n',extractfp);
-			}
+		 	fwrite(barcodePanel->wells[wellIndex].c_str(),barcodePanel->wells[wellIndex].length(),1,extractfp);
+		 	fputc(':',extractfp);
+		 	fwrite(cptr,UMILength-barcodeSize,1,extractfp);;
+		 	fputc('\n',extractfp);
+		 }
 		 if(outputfp){
     fwrite(barcodePanel->wells[wellIndex].c_str(),barcodePanel->wells[wellIndex].length(),1,outputfp);
-				fputc(':',outputfp);
-				fwrite(cptr,UMILength-barcodeSize,1,outputfp);;
-				fputc('\n',outputfp);
-			}
+		 	fputc(':',outputfp);
+		 	fwrite(cptr,UMILength-barcodeSize,1,outputfp);;
+		 	fputc('\n',outputfp);
+		 }
   }
-		else{
-			cptr=seq1->seq.s;
+		else if(barcode){
+		 cptr=seq1->seq.s;
 		 if(extractfp){
-				fputs("X",extractfp);
-				fputc(':',extractfp);
-				fwrite(cptr,UMILength-barcodeSize,1,extractfp);
+			 fputs("X",extractfp);
+			 fputc(':',extractfp);
+			 fwrite(cptr,UMILength-barcodeSize,1,extractfp);
 				fputc('\n',extractfp);
-			}				
+			} 				
 		 if(outputfp){
-				fputs("XX",outputfp);
-				fputc(':',outputfp);
-				fwrite(cptr,UMILength-barcodeSize,1,outputfp);;
+			 fputs("X",outputfp);
+			 fputc(':',outputfp);
+				fwrite(cptr,UMILength-barcodeSize,1,outputfp);
 				fputc('\n',outputfp);
-			}					
+			} 					
 		}
+		else{
+			fwrite(seq1->seq.s,UMILength,1,outputfp);
+			fputc('\n',outputfp);			
+		}	 
 		if(outputfp){
 		 fputs(seq2->seq.s,outputfp);
 		 fputs("\n+\n",outputfp);		 
    fputs(seq2->qual.s,outputfp);
    fputc('\n',outputfp);
-		}
-	}
-	if(outputfp && outputfp != stdout)fclose(outputfp);		 
+ 	}
+	}	
+ if(outputfp && outputfp != stdout)fclose(outputfp);		 
  kseq_destroy(seq1);
  kseq_destroy(seq2);
  gzclose(fp1);
@@ -217,7 +232,7 @@ int main(int argc, char *argv[]){
 		fprintf(stderr,"WARNING %d empty sequences and %d name mismatches encountered\n",emptySeqs,nameMismatch);
 	}
 	//if(outputFileName) free(outputFileName);	
-	if(barcodePanel)delete barcodePanel;
+	if(barcode && barcodePanel)delete barcodePanel;
  return 0;  
 }
 

@@ -17,17 +17,23 @@ template <class T1, class T2>class umipanel{
 	 unsigned int nBarcodes=0;
 	 unsigned int barcodeSize=0;
 	 unsigned int hashSize=0;
-	 unsigned int hashTolerance; //how many basepairs difference for matching panel
+	 unsigned int mismatchTol; //how many basepairs difference for matching panel
+	 unsigned int NTol; //how many basepairs in query sequence
 	 hamming<T1> hammingEval;
 	 umipanel(){
 			nBarcodes=0;
 			barcodeSize=0;
 		}	
- 	umipanel (string fileName,int tol){
+ 	umipanel (string fileName,int _mismatchTol,int _NTol){
 			//read in panel
-			hashTolerance=tol;
+			mismatchTol=_mismatchTol;
+			NTol=_NTol;
  		string line,name,well,sequence;
    ifstream inFile(fileName,ifstream::in);
+   if(!inFile){
+				fprintf(stderr,"unable to read in barcode file %s\n",fileName.c_str());
+				exit(EXIT_FAILURE);
+			}
    while(getline(inFile,line)){
     istringstream iss(line);
     iss >> panelID; iss >> well;iss >> sequence;
@@ -59,16 +65,18 @@ template <class T1, class T2>class umipanel{
 			for(int i=0;i<barcodeSize;i++)
 			 seq[i]='N';
    for(int i=1;i<hashSize;i++){
+				int numberofNs=0;
 				int divisor=5;
 				seq[0]=bp[i%divisor];
 				int j=1;
 				while(i%divisor == 0 && j<barcodeSize){
 					indices[j]=(indices[j]+1)%5;
 					seq[j]=bp[indices[j]];
+					if(!seq[j])numberofNs++;
 				 divisor*=5;
 				 j++;
 				}
-				hash[i]=hammingEval.bestMatch(sequences,seq,nBarcodes,hashTolerance)+1;		
+				hash[i]=hammingEval.bestMatch(sequences,seq,nBarcodes,mismatchTol,NTol)+1;		
 			}
 			delete[] seq;	
 			delete[] indices;	

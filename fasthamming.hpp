@@ -448,16 +448,19 @@ template <class T> class hamming{
 		}
 		return -1;	
 	}
-		unsigned int bestMatch (vector<string> &panelSeqs, char *query,int nPanelSeqs,int tol){
+		unsigned int bestMatch (vector<string> &panelSeqs, char *query,int nPanelSeqs,int mismatchTol,int NTol){
 		//when comparing a single query with Ns we don't have to take into account the N's since
 		//they give the same signal regardless of the panelSeq
 		//we will initialize it anyway to get a meaningfull absolute distance
 		int bestIndex=0,nBest=1;
 		int maxDist=0;
+		int nNs=0;
   for (unsigned int i = 0; i < patternLength; i++){
 	 	if(query[i] != 'N' && panelSeqs[0][i] !=query[i]){
     maxDist++;
-	 	}	
+	 	}
+	 	else if (query[i] == 'N') nNs++;
+	 	if(nNs > NTol)return -1;
 	 }
 		for(int i=1;i<nPanelSeqs ;i++){
    int dist=0;
@@ -476,7 +479,7 @@ template <class T> class hamming{
 				maxDist=dist;
 			}			
 		}
-		if(maxDist <=tol && nBest==1){
+		if(maxDist <=mismatchTol && nBest==1){
 			return bestIndex;
 		}
 		return -1;	

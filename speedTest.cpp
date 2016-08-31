@@ -162,7 +162,7 @@ void obscureBarcodes(char **a,char *barcodes,int barcodeSize,int nSeqs,int nObsc
 void testPanel(int nBases,int nSeqs,int maxdist){
 	clock_t start;
 	hamming<uint32_t> phammingEval=hamming<uint32_t>(nBases);
-	umipanel <uint32_t,unsigned char> testPanel(string("/mnt/backup/barcodes_trugrade_96_set4.dat"),1);
+	umipanel <uint32_t,unsigned char> testPanel(string("/mnt/backup/barcodes_trugrade_96_set4.dat"),0,2);
  char *goodBarcodes,*badBarcodes;
 	randomBarcodes<uint32_t,unsigned char>(&goodBarcodes,&testPanel,nSeqs);
  obscureBarcodes(&badBarcodes,goodBarcodes,nBases,nSeqs,maxdist);
@@ -176,8 +176,8 @@ void testPanel(int nBases,int nSeqs,int maxdist){
  for(int i=0;i<nSeqs;i++){
 		int dist1=phammingEval.bestMatch(testPanel.sequences,badBarcodes+i*nBases,testPanel.nBarcodes);
   int dist2=phammingEval.bestMatch(&(testPanel.Aseqs[0]),encodedbcs+i,testPanel.nBarcodes);
-  int dist3=testPanel.bestMatch(badBarcodes+i*nBases);
-  if(dist1 != dist3){
+  int dist3=testPanel.bestMatch(badBarcodes+i*nBases)-1;
+  if(dist2 != dist3){
 			fprintf(stderr,"mismatch %d %d %d\n",i,dist1,dist3);
 			exit(1);
 		}	
