@@ -5,9 +5,11 @@
 #include <iostream> 
 #include <unordered_map> 
 #include <unordered_set> 
+#include <set> 
 #include <vector> 
 #include "kseq.h"
 #include <glob.h>
+#include "umitools.hpp"
 
 #define MAX_EDIT_DISTANCE 1
 #define MAX_BEST 20
@@ -63,16 +65,16 @@ int main(int argc, char *argv[]){
  string logFile=string(dge_dir)+"/"+string(sample_id)+".unq.log.dat";
  string unknownFile=string(dge_dir)+"/"+string(sample_id)+".unq.unknown_list";
  string totalAlignFile=string(dge_dir)+"/"+string(sample_id)+".unq.refseq.total.dat";
- string umiFile=string(dge_dir)+"/"+string(sample_id)+".unq.refseq.umi.total.dat";
- string erccFile=string(dge_dir)+"/"+string(sample_id)+".unq.spike.total.data";
+ string umiFile=string(dge_dir)+"/"+string(sample_id)+".unq.refseq.umi.dat";
+ string erccFile=string(dge_dir)+"/"+string(sample_id)+".unq.spike.total.dat";
  string erccUMIFile=string(dge_dir)+"/"+string(sample_id)+".unq.spike.umi.dat";
  string wellTotalFile=string(dge_dir)+"/"+string(sample_id)+".unq.well_summary.dat";
  
  string logFile_mm=string(dge_dir)+"/"+string(sample_id)+".all.log.dat";
  string unknownFile_mm=string(dge_dir)+"/"+string(sample_id)+".all.unknown_list";
  string totalAlignFile_mm=string(dge_dir)+"/"+string(sample_id)+".all.refseq.total.dat";
- string umiFile_mm=string(dge_dir)+"/"+string(sample_id)+".all.refseq.umi.total.dat";
- string erccFile_mm=string(dge_dir)+"/"+string(sample_id)+".all.spike.total.data";
+ string umiFile_mm=string(dge_dir)+"/"+string(sample_id)+".all.refseq.umi.dat";
+ string erccFile_mm=string(dge_dir)+"/"+string(sample_id)+".all.spike.total.dat";
  string erccUMIFile_mm=string(dge_dir)+"/"+string(sample_id)+".all.spike.umi.dat";
  string wellTotalFile_mm=string(dge_dir)+"/"+string(sample_id)+".all.well_summary.dat";
  
@@ -82,7 +84,11 @@ int main(int argc, char *argv[]){
  sprintf(glob_str,"%s/*.sam",aligned_dir);
  glob(glob_str,GLOB_TILDE,NULL,&glob_result);
  
- 		
+ int mismatchTol=0;
+ int NTol=0;
+ 
+ //umipanel<uint32_t,unsigned char> *barcodePanel=0; //change to <uint32_t,uint16_t> for 384 wells
+ umipanel<uint32_t,unsigned char> barcodePanel(string(barcodes),mismatchTol,NTol);  		
 	//initialize counters
 	unsigned int 
 	 //unq counts
@@ -174,10 +180,16 @@ int main(int argc, char *argv[]){
 	   //get rid of all the bad counts
 
 	   //parse for barcode
+
  	  splitStr(items[0],":",tempItems);
- 	  string well=tempItems[tempItems.size()-2];
- 	  if(well == "X")continue;
-	   string barcode=tempItems[tempItems.size()-1].substr(6,10); //change if barcode size changes
+ 	  string fullBarcode=tempItems[tempItems.size()-1];
+ 	  
+ 	  //string well=tempItems[tempItems.size()-2];
+ 	  int wellIndex=barcodePanel.bestMatch(fullBarcode.c_str());
+ 	  if(!wellIndex)continue;
+ 	  wellIndex--;
+ 	  string well=barcodePanel.wells[wellIndex];
+	   string barcode=fullBarcode.substr(6,10); //change if barcode size changes
 	   //skip if ambiguous barcode
 	   if(ambigCheck(barcode))continue;
 
@@ -206,16 +218,16 @@ int main(int argc, char *argv[]){
 				if (aligned_id.substr(0,4) == "ERCC"){
 					umi= well+"_"+barcode+"_"+aligned_id;
 					if(!best_hits_list.size()){ 
-					 count_spike_total[well_to_index[well]][ercc_to_index[aligned_id]]++;						
+					 count_spike_total[wellIndex][ercc_to_index[aligned_id]]++;						
 					 if(!umi_seen.count(umi)){
 						 umi_seen.insert(umi);
-						 count_spike_umi[well_to_index[well]][ercc_to_index[aligned_id]]++;
+						 count_spike_umi[wellIndex][ercc_to_index[aligned_id]]++;
 					 }
 					} 
-					count_spike_total_mm[well_to_index[well]][ercc_to_index[aligned_id]]++;
+					count_spike_total_mm[wellIndex][ercc_to_index[aligned_id]]++;
 					if(!umi_seen_mm.count(umi)){
 						umi_seen_mm.insert(umi);
-						count_spike_umi_mm[well_to_index[well]][ercc_to_index[aligned_id]]++;
+						count_spike_umi_mm[wellIndex][ercc_to_index[aligned_id]]++;
 					}
 				}
 				else if 	(aligned_id.substr(0,4) == "chrM"){
@@ -235,19 +247,20 @@ int main(int argc, char *argv[]){
 				}
 				else if (refseq_to_gene.count(aligned_id)){
 					string gene = refseq_to_gene[aligned_id];
+					const unsigned int gid =gene_to_index[gene];
+
 					umi= well+"_"+barcode+"_"+gene;
 					bool multiGene=multiGeneHit(best_hits_list,gene,refseq_to_gene);
 					if(!multiGene){
-						//fprintf(stderr,"%s %d %s %d\n",well.c_str(),well_to_index[well],gene.c_str(),gene_to_index[gene]);
-						count_total[well_to_index[well]][gene_to_index[gene]]++;
+						count_total[wellIndex][gid]++;
 					 if(!umi_seen.count(umi)){
-						 count_umi[well_to_index[well]][gene_to_index[gene]]++;
+						 count_umi[wellIndex][gid]++;
 						 umi_seen.insert(umi);
 					 }	
 					}
-					count_total_mm[well_to_index[well]][gene_to_index[gene]]++;
+					count_total_mm[wellIndex][gid]++;
 					if(!umi_seen_mm.count(umi)){
-						count_umi_mm[well_to_index[well]][gene_to_index[gene]]++;
+						count_umi_mm[wellIndex][gid]++;
 						umi_seen_mm.insert(umi);
 					}					
 				}
@@ -373,7 +386,7 @@ int main(int argc, char *argv[]){
 	}
 	fprintf(fp,"\n"); 
  for(int i=0;i<geneList.size();i++){
-  fprintf(fp,"%s\t",geneList[i].c_str(),count_umi_mm[i]);
+  fprintf(fp,"%s\t",geneList[i].c_str());
   for(int j=0;j<NWELLS-1;j++){
 			fprintf(fp,"%d\t",count_umi_mm[j][i]);
 		}
@@ -386,11 +399,11 @@ int main(int argc, char *argv[]){
 	}
 	fprintf(fp,"\n"); 
  for(int i=0;i<erccList.size();i++){
-  fprintf(fp,"%s\t",erccList[i].c_str(),count_spike_umi[i]);
-  for(int j=0;j<NWELLS-1;j++){
-			fprintf(fp,"%d\t",count_spike_umi[j][i]);
+  fprintf(fp,"%s",erccList[i].c_str());
+  for(int j=0;j<NWELLS;j++){
+			fprintf(fp,"\t%d",count_spike_umi[j][i]);
 		}
-		fprintf(fp,"%d\n",count_spike_umi[NWELLS-1][i]);
+		fprintf(fp,"\n");
 	}
  fclose(fp);
  if(!(fp=fopen(erccFile_mm.c_str(),"w")))exit(EXIT_FAILURE);
@@ -399,11 +412,11 @@ int main(int argc, char *argv[]){
 	}
 	fprintf(fp,"\n"); 
  for(int i=0;i<erccList.size();i++){
-  fprintf(fp,"%s\t",erccList[i].c_str(),count_spike_umi_mm[i]);
-  for(int j=0;j<NWELLS-1;j++){
-			fprintf(fp,"%d\t",count_spike_umi_mm[j][i]);
+  fprintf(fp,"%s",erccList[i].c_str());
+  for(int j=0;j<NWELLS;j++){
+			fprintf(fp,"\t%d",count_spike_umi_mm[j][i]);
 		}
-		fprintf(fp,"%d\n",count_spike_umi_mm[NWELLS-1][i]);
+		fprintf(fp,"\n");
 	}
  fclose(fp);   
  if(!(fp=fopen(erccUMIFile.c_str(),"w")))exit(EXIT_FAILURE);
@@ -412,11 +425,11 @@ int main(int argc, char *argv[]){
 	}
 	fprintf(fp,"\n");
  for(int i=0;i<erccList.size();i++){
-  fprintf(fp,"%s\t",erccList[i].c_str(),count_spike_total[i]);
-  for(int j=0;j<NWELLS-1;j++){
-			fprintf(fp,"%d\t",count_spike_total[j][i]);
+  fprintf(fp,"%s",erccList[i].c_str());
+  for(int j=0;j<NWELLS;j++){
+			fprintf(fp,"\t%d",count_spike_total[j][i]);
 		}
-		fprintf(fp,"%d\n",count_spike_total[NWELLS-1][i]);
+		fprintf(fp,"\n");
 	}
  fclose(fp);
  if(!(fp=fopen(erccUMIFile_mm.c_str(),"w")))exit(EXIT_FAILURE);
@@ -425,11 +438,11 @@ int main(int argc, char *argv[]){
 	}
 	fprintf(fp,"\n"); 
  for(int i=0;i<erccList.size();i++){
-  fprintf(fp,"%s\t",erccList[i].c_str(),count_spike_total_mm[i]);
-  for(int j=0;j<NWELLS-1;j++){
-			fprintf(fp,"%d\t",count_spike_total_mm[j][i]);
+  fprintf(fp,"%s",erccList[i].c_str());
+  for(int j=0;j<NWELLS;j++){
+			fprintf(fp,"\t%d",count_spike_total_mm[j][i]);
 		}
-		fprintf(fp,"%d\n",count_spike_total_mm[NWELLS-1][i]);
+		fprintf(fp,"\n");
 	}
  fclose(fp);
  if(!(fp=fopen(wellTotalFile.c_str(),"w")))exit(EXIT_FAILURE);
@@ -439,61 +452,59 @@ int main(int argc, char *argv[]){
 	fprintf(fp,"\n");
  
  fprintf(fp,"Refseq_Total"); 
- for(int i=0;i<NWELLS-1;i++){
-		fprintf(fp,"%d\t",sumCountsi(count_total,i,geneList.size()));
+ for(int i=0;i<NWELLS;i++){
+		fprintf(fp,"\t%d",sumCountsi(count_total,i,geneList.size()));
 	}
-	fprintf(fp,"%d\n",sumCountsi(count_total,NWELLS-1,geneList.size()));
+	fprintf(fp,"\n");
 	
  fprintf(fp,"Refseq_UMI"); 
- for(int i=0;i<NWELLS-1;i++){
-		fprintf(fp,"%d\t",sumCountsi(count_umi,i,geneList.size()));
+ for(int i=0;i<NWELLS;i++){
+		fprintf(fp,"\t%d",sumCountsi(count_umi,i,geneList.size()));
 	}
-	fprintf(fp,"%d\n",sumCountsi(count_umi,NWELLS-1,geneList.size()));
+	fprintf(fp,"\n");
 	
  fprintf(fp,"Spike_Total"); 
- for(int i=0;i<NWELLS-1;i++){
-		fprintf(fp,"%d\t",sumCountsi(count_spike_total,i,erccList.size()));
+ for(int i=0;i<NWELLS;i++){
+		fprintf(fp,"\t%d",sumCountsi(count_spike_total,i,erccList.size()));
 	}
-	fprintf(fp,"%d\n",sumCountsi(count_spike_total,NWELLS-1,erccList.size()));
+	fprintf(fp,"\n");
 	
  fprintf(fp,"Spike_UMI"); 
- for(int i=0;i<NWELLS-1;i++){
-		fprintf(fp,"%d\t",sumCountsi(count_spike_umi,i,erccList.size()));
+ for(int i=0;i<NWELLS;i++){
+		fprintf(fp,"\t%d",sumCountsi(count_spike_umi,i,erccList.size()));
 	}
-	fprintf(fp,"%d\n",sumCountsi(count_spike_umi,NWELLS-1,erccList.size()));
+	fprintf(fp,"\n");
  fclose(fp);
  
- if(!(fp=fopen(wellTotalFile_mm.c_str(),"w")))exit(EXIT_FAILURE);
-  fprintf(fp,"\t"); 
- for(int i=0;i<NWELLS-1;i++){
-		fprintf(fp,"%s\t",wellList[i]);
+ if(!(fp=fopen(wellTotalFile_mm.c_str(),"w")))exit(EXIT_FAILURE); 
+ for(int i=0;i<wellList.size();i++){
+	 fprintf(fp,"\t%s",wellList[i].c_str());
 	}
-	fprintf(fp,"%s\n",wellList[NWELLS-1]);
+	fprintf(fp,"\n");
  
  fprintf(fp,"Refseq_Total"); 
- for(int i=0;i<NWELLS-1;i++){
-		fprintf(fp,"%d\t",sumCountsi(count_total_mm,i,geneList.size()));
+ for(int i=0;i<NWELLS;i++){
+		fprintf(fp,"\t%d",sumCountsi(count_total_mm,i,geneList.size()));
 	}
-	fprintf(fp,"%d\n",sumCountsi(count_total_mm,NWELLS-1,geneList.size()));
+	fprintf(fp,"\n",sumCountsi(count_total_mm,NWELLS-1,geneList.size()));
 	
  fprintf(fp,"Refseq_UMI"); 
- for(int i=0;i<NWELLS-1;i++){
-		fprintf(fp,"%d\t",sumCountsi(count_umi_mm,i,geneList.size()));
+ for(int i=0;i<NWELLS;i++){
+		fprintf(fp,"\t%d",sumCountsi(count_umi_mm,i,geneList.size()));
 	}
-	fprintf(fp,"%d\n",sumCountsi(count_umi_mm,NWELLS-1,geneList.size()));
+	fprintf(fp,"\n");
 	
  fprintf(fp,"Spike_Total"); 
- for(int i=0;i<NWELLS-1;i++){
-		fprintf(fp,"%d\t",sumCountsi(count_spike_total_mm,i,erccList.size()));
+ for(int i=0;i<NWELLS;i++){
+		fprintf(fp,"\t%d",sumCountsi(count_spike_total_mm,i,erccList.size()));
 	}
-	fprintf(fp,"%d\n",sumCountsi(count_spike_total_mm,NWELLS-1,erccList.size()));
-	
+	fprintf(fp,"\n");
 	
  fprintf(fp,"Spike_UMI"); 
- for(int i=0;i<NWELLS-1;i++){
-		fprintf(fp,"%d\t",sumCountsi(count_spike_umi_mm,i,erccList.size()));
+ for(int i=0;i<NWELLS;i++){
+		fprintf(fp,"\t%d",sumCountsi(count_spike_umi_mm,i,erccList.size()));
 	}
-	fprintf(fp,"%d\n",sumCountsi(count_spike_umi_mm,NWELLS-1,erccList.size()));
+	fprintf(fp,"\n");
  fclose(fp);
  	 //clean up
 	delete[]count_spike_total[0];
@@ -605,7 +616,9 @@ void readERCC(char *filename, vector<string> &erccList){
 	char line[64]; //max line width is 50
 	while(fgets(line,sizeof(line),fp)){
 	 if(line[0] == '>'){ //fasta file - just want comment line without carat
-	  erccList.push_back(string(line+1));
+			char temp[64];
+			sscanf(line+1,"%s",temp);
+	  erccList.push_back(string(temp));
 		}
 	}
 	fclose(fp);	
@@ -631,7 +644,6 @@ void readRefseq(char *filename, unordered_map<string,string> &refseq_to_gene, ve
 
 bool polyACheck(string &sequence){
 	if(sequence.size() < 20) return 0;
-	
 	const char *c=sequence.c_str()+sequence.size()-20;
 	while(*c){
 		if(*c != 'A') return 0;

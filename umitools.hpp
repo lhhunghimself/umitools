@@ -81,10 +81,10 @@ template <class T1, class T2>class umipanel{
 			delete[] seq;	
 			delete[] indices;	
 		}
-		unsigned int bestMatch(char *query){
+		unsigned int bestMatch(const char *query){
 			return (unsigned int) hash[hashCode(query)];
 		}		 
-		unsigned int hashCode(char *sequence){
+		unsigned int hashCode(const char *sequence){
 			unsigned int code =0;
 			int k=1;
 			for (int i=0;i<barcodeSize;i++){
