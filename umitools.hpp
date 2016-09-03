@@ -5,6 +5,8 @@
 #include <string>
 #include "fasthamming.hpp"
 using namespace std;
+unsigned int hashCode4(string &sequence);
+bool ambigCheck(string &sequence,unsigned int &code);
 template <class T1, class T2>class umipanel{
 	//T1 is used to choose between 32 and 64 bit uint
 	//T2 is used to choose between unsigned char for 96 weill and uint16_t for 384 wells
@@ -107,4 +109,43 @@ template <class T1, class T2>class umipanel{
 			return code;	
 		}	
 };	
-
+unsigned int hashCode4(string &sequence){
+		unsigned int code =0;
+		int k=1;
+		for (int i=0;i<sequence.size();i++){
+		switch (sequence[i]){
+				case 'C':
+				 code+=k;
+					 break;
+					case 'G':
+					 code+=2*k;
+					 break;
+				 case 'T':
+				  code+=3*k;
+				 break;  
+				}
+				k*=4;				
+			}
+	return code;	
+}	
+bool ambigCheck(string &sequence,unsigned int &code){	
+	int k=1;
+	code=0;
+ for(int i=0;i<sequence.size();i++){
+		switch (sequence[i]){
+				 case 'N':
+				  return 1;	
+				 case 'C':
+				  code+=k;
+					break;
+					case 'G':
+					 code+=2*k;
+					break;
+				 case 'T':
+				  code+=3*k;
+				 break;  
+				}
+				k*=4;				
+	}
+	return 0;
+}	
