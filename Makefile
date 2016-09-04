@@ -2,9 +2,9 @@ CC=gcc
 CPP=g++
 LD=g++ -L /usr/local/lib
 ifdef DEBUG
-CFLAGS= -I./ -I./optparse -ggdb -I -Wall -std=c++11
+CFLAGS= -I./ -I./optparse -ggdb -I -Wall -fopenmp -std=c++11
 else
-CFLAGS= -I./ -I./optparse -Ofast -std=c++11 -fexpensive-optimizations -funroll-all-loops -ffast-math -finline-functions -m64 -mavx -msse3 -msse4 -frerun-loop-opt -static $(HDRS) $(DEFINES)
+CFLAGS= -I./ -I./optparse -Ofast -std=c++11 -fexpensive-optimizations -funroll-all-loops -ffast-math -finline-functions -fopenmp -m64 -mavx -msse3 -msse4 -frerun-loop-opt -static $(HDRS) $(DEFINES)
 endif
 LIBS= -lboost_filesystem -lboost_system -lgomp -lm -lc -lgcc -lrt -lz
 
@@ -49,6 +49,7 @@ optparse.o :
 	cd optparse && make
 
 clean:
+	-@rm  umimerge_parallel umimerge speedTest umiappend umisample umisplit
 	-@rm -rf *.o 2>/dev/null || true
 	-@rm -rf core.* 2>/dev/null || true
 default: all

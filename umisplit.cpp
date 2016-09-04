@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <iostream>
 #include <string.h>  
+#include <omp.h>
 #include "kseq.h"
 #include "umitools.hpp"
 #include <boost/filesystem.hpp>
@@ -16,6 +17,7 @@ namespace fs = boost::filesystem;
 extern "C" {
  #include "optparse.h"  
 }
+bool Ncheck(const char *seq, const int size);
 
 #define R1_LENGTH 16 //default barcode length
 
@@ -34,13 +36,13 @@ int main(int argc, char *argv[]){
  int mismatchTol=1,NTol=2;
  optparse_init(&options, argv);
  int nThreads=1;
+ int filter=0;
  vector<string> inputFiles;
  
- //change this if using 384 wells
- umipanel<uint32_t,unsigned char> *barcodePanel=0;
+
  
  //parse flags
- while ((opt = optparse(&options, "aievt:m:N:d:b:l:q:")) != -1) {
+ while ((opt = optparse(&options, "aievft:m:N:d:b:l:q:")) != -1) {
   switch (opt){
 			case 'a':
 			 append=1;
@@ -50,7 +52,10 @@ int main(int argc, char *argv[]){
 			break;
 			case 'e':
     extract=1;
-   break; 
+   break;
+			case 'f':
+    filter=1;
+   break;     
    case 'd':
     minDist=atoi(options.optarg);
    break;   
@@ -106,18 +111,24 @@ int main(int argc, char *argv[]){
 		}		
 	}
  fs::create_directory(fs::system_complete("./output"));
-	barcodePanel=new umipanel<uint32_t,unsigned char> (barcodeFileName,mismatchTol,NTol);
+  //change this if using 384 wells
+ umipanel<uint32_t,unsigned char> **barcodePanel=new umipanel<uint32_t,unsigned char>*[nThreads];
+ for(int i=0;i<nThreads;i++)
+	 barcodePanel[i]=new umipanel<uint32_t,unsigned char> (barcodeFileName,mismatchTol,NTol);
 	for(int i=0;i<NWELLS;i++){
-		auto p=fs::path("./output/"+barcodePanel->wells[i]);
+		auto p=fs::path("./output/"+barcodePanel[0]->wells[i]);
 		fs::create_directory(fs::system_complete(p));
 	}
 	//create bad directory	
-	auto p=fs::path("./output/X");
-	fs::create_directory(fs::system_complete(p));
-	
+	if(!filter){
+	 auto p=fs::path("./output/X");
+	 fs::create_directory(fs::system_complete(p));
+	}
 	string outputDir=fs::system_complete("output/").string();
-	#pragma omp for parallel nthreads=nThreads
+#pragma omp parallel for num_threads (nThreads) schedule (dynamic)
 	for (int i=0;i<inputFiles.size();i+=2){
+		const int tid=omp_get_thread_num();
+		const int wellSequenceSize=barcodePanel[tid]->barcodeSize;
 		gzFile fp1=0, fp2=0;  
   kseq_t *seq1,*seq2;
   int l1,l2;
@@ -137,17 +148,20 @@ int main(int argc, char *argv[]){
   for(int j=0;j<NWELLS+1;j++){
 			ofps[j]=0;
 			string file;
-			if(!j){
+			if(!filter && !j){
 				file=outputDir+"X"+"/"+R1stem+"R2_"+"X"+".fq";
-	   ofps[0]=fopen(file.c_str(),"w");
+	   ofps[0]=fopen(file.c_str(),"w");			
+	   if(!ofps[j]){
+				 fprintf(stderr,"%s unable to open file %s\n",inputFiles[i].c_str(),file.c_str());
+			 }	
 			}	
-			else{
-    file =outputDir+barcodePanel->wells[j-1]+"/"+R1stem+"R2_"+barcodePanel->wells[j-1]+".fq";
+			else if(j){
+    file =outputDir+barcodePanel[tid]->wells[j-1]+"/"+R1stem+"R2_"+barcodePanel[tid]->wells[j-1]+".fq";
     ofps[j]=fopen(file.c_str(),"w");
+			 if(!ofps[j]){
+				 fprintf(stderr,"%s unable to open file %s\n",inputFiles[i].c_str(),file.c_str());
+			 }				
 			}
-			if(!ofps[j]){
-				fprintf(stderr,"%s unable to open file %s\n",inputFiles[i].c_str(),file.c_str());
-			}	
 		}
 
 	 
@@ -170,7 +184,10 @@ int main(int argc, char *argv[]){
 		  if(*qptr<adjustedQ)*cptr='N';
 		  cptr++;qptr++;k++;
 		 }
-		 const unsigned int barcodeIndex=barcodePanel->bestMatch(seq1->seq.s);
+		 //check if there is a N
+		 if(filter && Ncheck((seq1->seq.s)+wellSequenceSize,UMILength-wellSequenceSize)) continue;
+		 const unsigned int barcodeIndex=barcodePanel[tid]->bestMatch(seq1->seq.s);
+		 if(filter && !barcodeIndex)continue;
 		 ofp=ofps[barcodeIndex];
 			fputc('@',ofp);
 		 fputs(seq2->name.s,ofp);
@@ -182,8 +199,10 @@ int main(int argc, char *argv[]){
    fputs(seq2->qual.s,ofp);
    fputc('\n',ofp);
 						 
-		}		   
-		for(int j=0;j<NWELLS+1;j++)
+		}
+		if(!filter)
+		 fclose(ofps[0]);		   
+		for(int j=1;j<NWELLS+1;j++)
 		 fclose(ofps[j]);
 		  
   kseq_destroy(seq1);
@@ -191,6 +210,14 @@ int main(int argc, char *argv[]){
   gzclose(fp1);
   gzclose(fp2);		 	 	
 	}
-	if(barcodePanel)delete barcodePanel;
+	for(int i=0;i<nThreads;i++)
+  if(barcodePanel[i])delete barcodePanel[i];
+ delete[] barcodePanel;
  return 0;  
+}
+
+bool Ncheck(const char *seq, const int size){
+	for(int i=0;i<size;i++)
+	 if(seq[i] == 'N')return 1;
+	return 0;
 }
