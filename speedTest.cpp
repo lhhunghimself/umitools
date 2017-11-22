@@ -19,25 +19,29 @@ void testPanel(int nBases,int nSeqs,int maxdist);
 //~ 80:1 for fast vs slow for long sequences 
 
 int main(int argc, char *argv[]){
+	//usage speedTest <nBases> <nSeqs> <maxDist> <seed>
 	int nBases=16;
 	int nSeqs=1000;
-	int maxdist=3;
+	int maxdist=4*nBases;
 	clock_t start;
  char *sequences;
- srand(1234);
-	uint64_t *encodedSequences;	
-
+ int seed=1234;
+ 
 	if(argc >= 2){
 		nBases=atoi(argv[1]);
 	}
 	if(argc>=3){
 		nSeqs=atoi(argv[2]);
 	}
-	if(argc==4){
+	if(argc>=4){
 		maxdist=atoi(argv[3]);
 	}
- testPanel(nBases,nSeqs,maxdist);
- exit(1);
+	if(argc==5){
+		seed=atoi(argv[4]);
+	}
+	srand(seed);
+// testPanel(nBases,nSeqs,maxdist);
+
 	
 	hamming<uint32_t> hammingEval=hamming<uint32_t>(nBases);
 	const unsigned int chunkSize=hammingEval.chunkSize;
@@ -55,13 +59,17 @@ int main(int argc, char *argv[]){
  for(int i=0;i<nSeqs+1;i++){
 		char *a=sequences+i*nBases;
 		for(int j=i+1;j<nSeqs;j++){
+			char sa[64],sb[64];
+			sa[nBases]=0;
+			sb[nBases]=0;
 			char *b=sequences+j*nBases;
 			int d1,d2;
 			d1=hammingEval.slowDistance(a,b,nBases,maxdist);
 			d2=hammingEval.distance(encodedSeqs+i,encodedSeqs+j,maxdist);
+			memcpy(sa,a,nBases);
+			memcpy(sb,b,nBases);
 			if(d1 !=d2){
-				fprintf(stderr,"For index i=%d and j=%d  correct is %d hamming is= %d\n",i,j,d1,d2);
-
+    fprintf(stderr,"For index i=%d and j=%d  correct is %d hamming is= %d\n",i,j,d1,d2);
 			}	
   }
 	}
@@ -71,7 +79,7 @@ int main(int argc, char *argv[]){
 		 dist=hammingEval.slowDistance(sequences+i*nBases,sequences+j*nBases,nBases,maxdist);
   }
 	}
-	fprintf (stderr,"slowHamming took %ld ms\n",(clock()-start)*1000/CLOCKS_PER_SEC);
+	fprintf (stderr,"slowHamming took %ld ms lastDist %d\n",(clock()-start)*1000/CLOCKS_PER_SEC,dist);
 	
 	start=clock();
 	for(int i=0;i<nSeqs+1;i++){
@@ -79,10 +87,7 @@ int main(int argc, char *argv[]){
 			dist=hammingEval.distance(encodedSeqs+i,encodedSeqs+j,maxdist);
   }
 	}
-	fprintf (stderr,"popCount took %ld ms %d\n",(clock()-start)*1000/CLOCKS_PER_SEC,dist);
-	
-	
-	delete [] encodedSequences;
+	fprintf (stderr,"popCount took %ld ms lastDist %d\n",(clock()-start)*1000/CLOCKS_PER_SEC,dist);
 }	
 
 void printSequences(char *sequences,int nSeqs,int nBases){
